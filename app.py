@@ -8,8 +8,13 @@ st.set_page_config(
     layout="wide",
 )
 
-# Carregamento dos dados
-df = pd.read_csv("https://raw.githubusercontent.com/vqrca/dashboard_salarios_dados/refs/heads/main/dados-imersao-final.csv")
+@st.cache_data
+def carregar_dados():
+    url = "https://raw.githubusercontent.com/vqrca/dashboard_salarios_dados/main/dados-imersao-final.csv"
+    df = pd.read_csv(url)
+    return df
+
+df = carregar_dados()
 
 # Barra Lateral (Filtros)
 st.sidebar.header("🔍 Filtros")
@@ -26,7 +31,7 @@ contratos_selecionados = st.sidebar.multiselect("Tipo de Contrato", contratos_di
 tamanhos_disponiveis = sorted(df['tamanho_empresa'].unique())
 tamanhos_selecionados = st.sidebar.multiselect("Tamanho da Empresa", tamanhos_disponiveis, default=tamanhos_disponiveis)
 
-# O dataframe principal é filtrado com base nas seleções feitas na barra lateral
+# DataFrame filtrado
 df_filtrado = df[
     (df['ano'].isin(anos_selecionados)) &
     (df['senioridade'].isin(senioridades_selecionadas)) &
@@ -34,9 +39,11 @@ df_filtrado = df[
     (df['tamanho_empresa'].isin(tamanhos_selecionados))
 ]
 
+# Título
 st.title("🎲 Dashboard de Análise de Salários na Área de Dados")
 st.markdown("Explore os dados salariais na área de dados nos últimos anos. Utilize os filtros à esquerda para refinar sua análise.")
 
+# Métricas
 st.subheader("Métricas gerais (Salário anual em USD)")
 
 if not df_filtrado.empty:
@@ -45,7 +52,10 @@ if not df_filtrado.empty:
     total_registros = df_filtrado.shape[0]
     cargo_mais_frequente = df_filtrado["cargo"].mode()[0]
 else:
-    salario_medio, salario_mediano, salario_maximo, total_registros, cargo_mais_comum = 0, 0, 0, ""
+    salario_medio = 0
+    salario_maximo = 0
+    total_registros = 0
+    cargo_mais_frequente = ""
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Salário médio", f"${salario_medio:,.0f}")
@@ -55,7 +65,7 @@ col4.metric("Cargo mais frequente", cargo_mais_frequente)
 
 st.markdown("---")
 
-# Visual com plotly
+# Gráficos
 st.subheader("Gráficos")
 
 col_graf1, col_graf2 = st.columns(2)
@@ -112,17 +122,23 @@ with col_graf3:
 with col_graf4:
     if not df_filtrado.empty:
         df_ds = df_filtrado[df_filtrado['cargo'] == 'Data Scientist']
-        media_ds_pais = df_ds.groupby('residencia_iso3')['usd'].mean().reset_index()
-        grafico_paises = px.choropleth(media_ds_pais,
-            locations='residencia_iso3',
-            color='usd',
-            color_continuous_scale='rdylgn',
-            title='Salário médio de Cientista de Dados por país',
-            labels={'usd': 'Salário médio (USD)', 'residencia_iso3': 'País'})
-        grafico_paises.update_layout(title_x=0.1)
-        st.plotly_chart(grafico_paises, use_container_width=True)
+        if not df_ds.empty:
+            media_ds_pais = df_ds.groupby('residencia_iso3')['usd'].mean().reset_index()
+            grafico_paises = px.choropleth(
+                media_ds_pais,
+                locations='residencia_iso3',
+                color='usd',
+                color_continuous_scale='rdylgn',
+                title='Salário médio de Cientista de Dados por país',
+                labels={'usd': 'Salário médio (USD)', 'residencia_iso3': 'País'}
+            )
+            grafico_paises.update_layout(title_x=0.1)
+            st.plotly_chart(grafico_paises, use_container_width=True)
+        else:
+            st.warning("Nenhum dado para Cientista de Dados.")
     else:
         st.warning("Nenhum dado para exibir no gráfico de países.")
 
+# Dados detalhados
 st.subheader("Dados Detalhados")
 st.dataframe(df_filtrado)
